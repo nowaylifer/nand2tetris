@@ -4,13 +4,19 @@ export enum InstructionType {
   L_INSTRUCTION = "L_INSTRUCTION",
 }
 
+export enum CompRegisterIndicator {
+  M = "1",
+  A = "0",
+}
+
+export const INITIAL_VARIABLE_ADDRESS = 16;
 export const INSTRUCTION_BIT_LENGTH = 16;
 export const A_INSTRUCTION_OPCODE = "0";
 export const C_INSTRUCTION_OPCODE = "111";
 
 export const CInstructionMnemonic = {
   DEST: {
-    "": "000",
+    default: "000",
     M: "001",
     D: "010",
     DM: "011",
@@ -58,7 +64,7 @@ export const CInstructionMnemonic = {
     "D|M": "010101",
   },
   JUMP: {
-    "": "000",
+    default: "000",
     JGT: "001",
     JEQ: "010",
     JGE: "011",
@@ -67,4 +73,26 @@ export const CInstructionMnemonic = {
     JLE: "110",
     JMP: "111",
   },
+} as const;
+
+export const defaultSymbolMap: Record<string, string> = {
+  SP: "0",
+  LCL: "1",
+  ARG: "2",
+  THIS: "3",
+  THAT: "4",
+  SCREEN: "16384",
+  KBD: "24576",
 };
+
+for (let i = 0; i < 16; i++) {
+  defaultSymbolMap[`R${i}`] = i.toString();
+}
+
+const escapeRegExp = (pattern: string) => pattern.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+
+const createMnemonicPattern = (obj: Record<string, string>) => Object.keys(obj).map(escapeRegExp).join("|");
+
+export const cInstructionRegExp = new RegExp(
+  `^((?<dest>${createMnemonicPattern(CInstructionMnemonic.DEST)})=)?(?<comp>${createMnemonicPattern(CInstructionMnemonic.COMP)})(;(?<jump>${createMnemonicPattern(CInstructionMnemonic.JUMP)}))?$`,
+);

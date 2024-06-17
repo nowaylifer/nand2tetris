@@ -1,27 +1,55 @@
-import Parser from "./parser";
-import Translator from "./translator";
-import { appendFile, access, rm } from "fs/promises";
-import { basename, extname, dirname, resolve } from "path";
+import path from "path";
+import split from "split2";
+import Pumpify from "pumpify";
+import { Transform } from "stream";
+import { pipeline } from "stream/promises";
+import { createReadStream, createWriteStream } from "fs";
+import Parser from "./parser.js";
+import Translator from "./translator.js";
+import type { Instruction, SymbolMap } from "./types.js";
+import { InstructionType, defaultSymbolMap } from "./instruction-set.js";
 
-const srcArg = process.argv[2];
-const outArg = process.argv[3];
-const srcFilename = basename(srcArg, extname(srcArg));
-const srcDirname = dirname(srcArg);
-const outPath = outArg ?? resolve(srcDirname, srcFilename + ".hack");
+const srcPath = process.argv[2];
 
-try {
-  await access(outPath);
-  await rm(outPath);
-} catch { }
+if (typeof srcPath !== "string") {
+  throw new Error("You must provide source file via first argument");
+}
 
-const parser = new Parser(srcArg);
-const translator = new Translator();
+const createParseStream = () => new Pumpify.obj(createReadStream(srcPath), split(), new Parser());
 
-do {
-  const instruction = await parser.advance();
+const firstPass = async (): Promise<SymbolMap> => {
+  const symbolMap = new Map(Object.entries(defaultSymbolMap));
 
-  if (instruction) {
-    const code = translator.translate(instruction);
-    await appendFile(outPath, code + "\n");
-  }
-} while (parser.hasMoreLines);
+  await pipeline(
+    createParseStream(),
+    new Transform({
+      objectMode: true,
+      transform(instruction: Instruction, _encoding, done) {
+        if (instruction.type === InstructionType.L_INSTRUCTION) {
+          symbolMap.set(instruction.symbol, instruction.number.toString());
+        }
+        done();
+      },
+    }),
+  );
+
+  return symbolMap;
+};
+
+const secondPass = async (symbolMap: SymbolMap) => {
+  const outputPath = path.resolve(path.dirname(srcPath), path.basename(srcPath, path.extname(srcPath)) + ".hack");
+  await pipeline(
+    createParseStream(),
+    new Translator(symbolMap),
+    new Transform({
+      objectMode: true,
+      transform(code: string, _encoding, done) {
+        this.push(code + "\n");
+        done();
+      },
+    }),
+    createWriteStream(outputPath),
+  );
+};
+
+firstPass().then(secondPass);

@@ -1,20 +1,28 @@
-import { InstructionType } from "./instruction-set";
+import { InstructionType, CInstructionMnemonic } from "./instruction-set.js";
 
-export type SymbolicInstruction = {
+export type AInstruction = {
   value: string;
-  type: InstructionType.A_INSTRUCTION | InstructionType.L_INSTRUCTION;
+  type: InstructionType.A_INSTRUCTION;
+  number: number;
   symbol: string;
 };
 
-export type CInstructionElements = {
-  comp: string;
-  dest?: string;
-  jump?: string;
+export type LInstruction = {
+  value: string;
+  type: InstructionType.L_INSTRUCTION;
+  number: number;
+  symbol: string;
 };
 
 export type CInstruction = {
   value: string;
   type: InstructionType.C_INSTRUCTION;
-} & CInstructionElements;
+  number: number;
+  comp: keyof typeof CInstructionMnemonic.COMP;
+  dest?: keyof typeof CInstructionMnemonic.DEST;
+  jump?: keyof typeof CInstructionMnemonic.JUMP;
+};
 
-export type Instruction = SymbolicInstruction | CInstruction;
+export type Instruction = AInstruction | LInstruction | CInstruction;
+
+export type SymbolMap = Map<string, string>;

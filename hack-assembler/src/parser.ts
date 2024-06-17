@@ -1,102 +1,58 @@
-import { createReadStream } from "fs";
-import { createInterface } from "readline";
-import { Instruction, CInstruction } from "./types";
-import { CInstructionMnemonic, InstructionType } from "./instruction-set";
+import { Transform, type TransformCallback, type TransformOptions } from "stream";
+import { InstructionType, cInstructionRegExp } from "./instruction-set.js";
+import type { Instruction, CInstruction } from "./types.js";
 
-const escapeRegExp = (pattern: string) =>
-  pattern.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+export default class Parser extends Transform {
+  private insctructionNum = -1;
 
-const getSymbolPattern = (obj: Record<string, string>) =>
-  Object.keys(obj).map(escapeRegExp).join("|");
-
-const cInstructionRegExp = new RegExp(
-  `^((?<dest>${getSymbolPattern(CInstructionMnemonic.DEST)})=)?(?<comp>${getSymbolPattern(CInstructionMnemonic.COMP)})(;(?<jump>${getSymbolPattern(CInstructionMnemonic.JUMP)}))?$`,
-);
-
-export default class Parser {
-  private currentInstruction: Instruction | null = null;
-  private lineCount = 0;
-  private _hasMoreLines = true;
-  private nextLine: () => Promise<string | void>;
-
-  constructor(src: string) {
-    async function* buildLineGenerator() {
-      const lineReader = createInterface({
-        input: createReadStream(src),
-        crlfDelay: Infinity,
-      });
-
-      for await (const line of lineReader) {
-        yield line;
-      }
-    }
-
-    const generator = buildLineGenerator();
-    let prev: string | void;
-
-    this.nextLine = async () => {
-      if (!prev) {
-        prev = (await generator.next()).value;
-      }
-      const next = await generator.next();
-      this._hasMoreLines = !next.done as boolean;
-      const line = prev;
-      prev = next.value;
-      return line;
-    };
+  constructor(options?: TransformOptions) {
+    super({ ...options, objectMode: true });
   }
 
-  async advance() {
-    let line;
+  override _transform(data: Buffer | string, _encoding: BufferEncoding, done: TransformCallback) {
+    const line = data.toString().trim();
+
     // skip comments and empty lines
-    do {
-      line = await this.nextLine();
-      line = line?.trim();
-    } while ((line === "" || line?.startsWith("//")) && this.hasMoreLines);
+    if (line && !line.startsWith("//")) {
+      let instruction = this.parseInstruction(line) as Instruction;
 
-    if (typeof line !== "string") return;
+      if (instruction.type === InstructionType.L_INSTRUCTION) {
+        instruction.number = this.insctructionNum + 1;
+      } else {
+        instruction.number = ++this.insctructionNum;
+      }
 
-    if (this.currentInstruction) {
-      this.lineCount++;
+      this.push(instruction);
     }
-
-    // remove inline comment
-    line = line.replace(/\/\/.*/g, "");
-
-    this.currentInstruction = this.parseInstruction(line);
-    return this.currentInstruction;
+    done();
   }
 
-  get hasMoreLines() {
-    return this._hasMoreLines;
-  }
-
-  private parseInstruction(instruction: string): Instruction {
-    if (instruction.startsWith("@")) {
+  private parseInstruction(source: string) {
+    if (source.startsWith("@")) {
       return {
-        value: instruction,
+        value: source,
         type: InstructionType.A_INSTRUCTION,
-        symbol: instruction.slice(1),
+        symbol: source.slice(1),
       };
     }
 
-    if (instruction.startsWith("(") && instruction.endsWith(")")) {
+    if (source.startsWith("(") && source.endsWith(")")) {
       return {
-        value: instruction,
+        value: source,
         type: InstructionType.L_INSTRUCTION,
-        symbol: instruction.slice(1, -1),
+        symbol: source.slice(1, -1),
       };
     }
 
-    const groups = instruction.match(cInstructionRegExp)?.groups;
+    const groups = source.match(cInstructionRegExp)?.groups as Pick<CInstruction, "dest" | "comp" | "jump"> | null;
     if (groups) {
       return {
-        value: instruction,
+        value: source,
         type: InstructionType.C_INSTRUCTION,
         ...groups,
-      } as CInstruction;
+      };
     }
 
-    throw new Error(`Invalid instruction: "${instruction}"`);
+    throw new Error(`Invalid instruction: "${source}"`);
   }
 }
