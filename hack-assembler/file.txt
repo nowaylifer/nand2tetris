@@ -1,7 +1,0 @@
-
-// comment
-@a //little 
-
-D=D&A;JNE
-@sum//comment
-M=M+1
