@@ -1,0 +1,24 @@
+{
+  "name": "vm-translator",
+  "type": "module",
+  "version": "1.0.0",
+  "main": "bin/vm-translator.js",
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "bin": {
+    "hack-assembler": "./bin/vm-translator.js"
+  },
+  "dependencies": {
+    "pumpify": "^2.0.1",
+    "split2": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "@types/pumpify": "^1.4.4",
+    "@types/split2": "^4.2.3",
+    "typescript": "^5.4.5"
+  }
+}

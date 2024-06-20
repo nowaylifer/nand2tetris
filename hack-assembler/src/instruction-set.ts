@@ -9,6 +9,7 @@ export enum CompRegisterIndicator {
   A = "0",
 }
 
+export const COMMENT_SYMBOL = "//";
 export const INITIAL_VARIABLE_ADDRESS = 16;
 export const INSTRUCTION_BIT_LENGTH = 16;
 export const A_INSTRUCTION_OPCODE = "0";

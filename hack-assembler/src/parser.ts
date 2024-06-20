@@ -1,5 +1,5 @@
 import { Transform, type TransformCallback, type TransformOptions } from "stream";
-import { InstructionType, cInstructionRegExp } from "./instruction-set.js";
+import { COMMENT_SYMBOL, InstructionType, cInstructionRegExp } from "./instruction-set.js";
 import type { Instruction, CInstruction } from "./types.js";
 
 export default class Parser extends Transform {
@@ -10,10 +10,13 @@ export default class Parser extends Transform {
   }
 
   override _transform(data: Buffer | string, _encoding: BufferEncoding, done: TransformCallback) {
-    const line = data.toString().trim();
+    const line = data
+      .toString()
+      .trim()
+      .replace(new RegExp(`${COMMENT_SYMBOL}.*`), "");
 
     // skip comments and empty lines
-    if (line && !line.startsWith("//")) {
+    if (line) {
       let instruction = this.parseInstruction(line) as Instruction;
 
       if (instruction.type === InstructionType.L_INSTRUCTION) {
