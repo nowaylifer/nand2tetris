@@ -11,9 +11,9 @@ import {
 } from "./instruction-set.js";
 
 class DecimalToBinaryConvertError extends Error {
-  constructor(value: unknown, options?: ErrorOptions | undefined) {
+  constructor(value: unknown) {
     const message = `Cannot convert ${value} to binary number`;
-    super(message, options);
+    super(message);
   }
 }
 
