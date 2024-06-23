@@ -22,7 +22,53 @@ export type ArithmeticCommand = {
   type: CommandType.C_ARITHMETIC;
 };
 
-export type Command = PopCommand | PushCommand | ArithmeticCommand;
+export type LabelCommand = {
+  value: string;
+  type: CommandType.C_LABEL;
+  labelValue: string;
+};
+
+export type GotoCommand = {
+  value: string;
+  type: CommandType.C_GOTO;
+  targetLabel: string;
+};
+
+export type IfCommand = {
+  value: string;
+  type: CommandType.C_IF;
+  targetLabel: string;
+};
+
+export type FunctionCommand = {
+  value: string;
+  type: CommandType.C_FUNCTION;
+  funcName: string;
+  nVars: number;
+};
+
+export type CallCommand = {
+  value: string;
+  type: CommandType.C_CALL;
+  funcName: string;
+  nArgs: number;
+};
+
+export type ReturnCommand = {
+  value: "return";
+  type: CommandType.C_RETURN;
+};
+
+export type Command =
+  | PopCommand
+  | PushCommand
+  | ArithmeticCommand
+  | LabelCommand
+  | GotoCommand
+  | IfCommand
+  | FunctionCommand
+  | CallCommand
+  | ReturnCommand;
 
 export type MemorySegmentCommon =
   | MemorySegment.Local

@@ -32,6 +32,18 @@ export default class Translator extends Transform {
         return this.translatePushCommand(command);
       case CommandType.C_POP:
         return this.translatePopCommand(command);
+      case CommandType.C_LABEL:
+        return [];
+      case CommandType.C_GOTO:
+        return [];
+      case CommandType.C_IF:
+        return [];
+      case CommandType.C_FUNCTION:
+        return [];
+      case CommandType.C_CALL:
+        return [];
+      case CommandType.C_RETURN:
+        return [];
     }
   }
 
