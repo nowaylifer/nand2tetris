@@ -49,6 +49,13 @@ export enum ASSEMBLY_BUILT_IN_SYMBOLS {
   THAT = "THAT",
 }
 
+export const functionFrameRegisters = [
+  ASSEMBLY_BUILT_IN_SYMBOLS.LCL,
+  ASSEMBLY_BUILT_IN_SYMBOLS.ARG,
+  ASSEMBLY_BUILT_IN_SYMBOLS.THIS,
+  ASSEMBLY_BUILT_IN_SYMBOLS.THAT,
+];
+
 export const arithmeticMap = {
   [ArithmeticCommandEnum.Eq]: "JEQ",
   [ArithmeticCommandEnum.Gt]: "JGT",

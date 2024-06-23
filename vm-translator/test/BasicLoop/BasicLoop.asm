@@ -20,7 +20,7 @@ D=M
 A=M
 M=D
 // label LOOP
-(BasicLoop.global$LOOP)
+(global$LOOP)
 // push argument 0
 @0
 D=A
@@ -127,7 +127,7 @@ M=M+1
 @SP
 AM=M-1
 D=M
-@BasicLoop.global$LOOP
+@global$LOOP
 D;JNE
 // push local 0
 @0
@@ -140,6 +140,3 @@ A=M
 M=D
 @SP
 M=M+1
-(END_PROGRAM)
-@END_PROGRAM
-0;JMP
