@@ -1,5 +1,14 @@
 import { Transform, type TransformCallback, type TransformOptions } from "stream";
-import type { ArithmeticCommand, Command, MemorySegmentCommon, PopCommand, PushCommand } from "./types.js";
+import type {
+  ArithmeticCommand,
+  Command,
+  GotoCommand,
+  IfCommand,
+  LabelCommand,
+  MemorySegmentCommon,
+  PopCommand,
+  PushCommand,
+} from "./types.js";
 import {
   TEMP_SEGMENT_START,
   memorySegmentMap,
@@ -11,7 +20,8 @@ import {
 
 export default class Translator extends Transform {
   private filename: string;
-  private ifCount = -1;
+  private compareCount = -1;
+  private currentFunc: string | null = "global";
 
   constructor(filename: string, options?: TransformOptions) {
     super({ ...options, objectMode: true });
@@ -24,6 +34,14 @@ export default class Translator extends Transform {
     done();
   }
 
+  override _flush(done: TransformCallback) {
+    done(null, this.endProgram().join("\n"));
+  }
+
+  private endProgram() {
+    return ["(END_PROGRAM)", "@END_PROGRAM", "0;JMP"];
+  }
+
   private translate(command: Command) {
     switch (command.type) {
       case CommandType.C_ARITHMETIC:
@@ -33,11 +51,11 @@ export default class Translator extends Transform {
       case CommandType.C_POP:
         return this.translatePopCommand(command);
       case CommandType.C_LABEL:
-        return [];
+        return this.translateLabelCommand(command);
       case CommandType.C_GOTO:
-        return [];
+        return this.translateGotoCommand(command);
       case CommandType.C_IF:
-        return [];
+        return this.translateIfCommand(command);
       case CommandType.C_FUNCTION:
         return [];
       case CommandType.C_CALL:
@@ -108,6 +126,31 @@ export default class Translator extends Transform {
     }
   }
 
+  private createLabelName(labelValue: string) {
+    return `${this.filename}.${this.currentFunc}$${labelValue}`;
+  }
+
+  private translateLabelCommand(command: LabelCommand) {
+    if (this.currentFunc == null) {
+      throw new Error("Cannot use label command outside a function");
+    }
+    return [`(${this.createLabelName(command.labelValue)})`];
+  }
+
+  private translateGotoCommand(command: GotoCommand) {
+    if (this.currentFunc == null) {
+      throw new Error("Cannot use goto command outside a function");
+    }
+    return [`@${this.createLabelName(command.targetLabel)}`, "0;JMP"];
+  }
+
+  private translateIfCommand(command: IfCommand) {
+    if (this.currentFunc == null) {
+      throw new Error("Cannot use if-goto command outside a function");
+    }
+    return [...this.popSnippet(), `@${this.createLabelName(command.targetLabel)}`, "D;JNE"];
+  }
+
   private add() {
     return [...this.popSnippet(), ...this.popSnippet().slice(0, -1), "D=D+M", ...this.pushSnippet()];
   }
@@ -121,7 +164,7 @@ export default class Translator extends Transform {
   }
 
   private not() {
-    return [...this.popSnippet().slice(0, -1), "D=!M", ...this.popSnippet()];
+    return [...this.popSnippet().slice(0, -1), "D=!M", ...this.pushSnippet()];
   }
 
   private and() {
@@ -133,9 +176,9 @@ export default class Translator extends Transform {
   }
 
   private compare(operation: ArithmeticCommandEnum.Eq | ArithmeticCommandEnum.Gt | ArithmeticCommandEnum.Lt) {
-    this.ifCount++;
-    const ifTrue = `IF_${this.ifCount}_${this.filename}`;
-    const afterIf = `AFTER_IF_${this.ifCount}_${this.filename}`;
+    this.compareCount++;
+    const ifTrue = `${this.filename}.if_${operation}$${this.compareCount}`;
+    const afterIf = `${this.filename}.after_${operation}$${this.compareCount}`;
 
     return [
       ...this.popSnippet(),
@@ -159,10 +202,10 @@ export default class Translator extends Transform {
       "D=A",
       `@${memorySegmentMap[memorySegment]}`,
       "D=D+M",
-      "@R0",
+      "@R13",
       "M=D",
       ...this.popSnippet(),
-      "@R0",
+      "@R13",
       "A=M",
       "M=D",
     ];
@@ -178,10 +221,6 @@ export default class Translator extends Transform {
 
   private popTemp(index: number) {
     return [...this.popSnippet(), `@${TEMP_SEGMENT_START + index}`, "M=D"];
-  }
-
-  private popSnippet() {
-    return ["@SP", "AM=M-1", "D=M"];
   }
 
   private pushCommon(memorySegment: MemorySegmentCommon, index: number) {
@@ -202,6 +241,10 @@ export default class Translator extends Transform {
 
   private pushPointer(index: number) {
     return [`@${index === 0 ? "THIS" : "THAT"}`, "D=M", ...this.pushSnippet()];
+  }
+
+  private popSnippet() {
+    return ["@SP", "AM=M-1", "D=M"];
   }
 
   private pushSnippet() {

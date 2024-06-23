@@ -1,4 +1,3 @@
-import { type } from "os";
 import { CommandType, type ArithmeticCommandEnum, type MemorySegment, type StackCommand } from "./command-set.js";
 
 export type MemoryCommandTokens = {

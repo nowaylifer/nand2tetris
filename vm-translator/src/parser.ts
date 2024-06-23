@@ -28,6 +28,7 @@ export default class Parser extends Transform {
     if (line) {
       this.push(this.parseCommand(line));
     }
+
     done();
   }
 

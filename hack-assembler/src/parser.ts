@@ -13,7 +13,7 @@ export default class Parser extends Transform {
     const line = data
       .toString()
       .trim()
-      .replace(new RegExp(`${COMMENT_SYMBOL}.*`), "");
+      .replace(new RegExp(`\\s*${COMMENT_SYMBOL}.*`), "");
 
     // skip comments and empty lines
     if (line) {
@@ -27,6 +27,7 @@ export default class Parser extends Transform {
 
       this.push(instruction);
     }
+
     done();
   }
 
