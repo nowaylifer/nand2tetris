@@ -21,13 +21,12 @@ import {
   functionFrameRegisters,
 } from "./command-set.js";
 
-const DEFAULT_FUNC_NAME = "global";
-
 export default class Translator extends Transform {
+  private isFirstChunk = true;
   private filename: string;
-  private compareCount = -1;
   private callCount = -1;
-  private currentFunc: string = DEFAULT_FUNC_NAME;
+  private compareCount = -1;
+  private currentFunc!: string;
 
   constructor(filename: string, options?: TransformOptions) {
     super({ ...options, objectMode: true });
@@ -38,11 +37,15 @@ export default class Translator extends Transform {
     if (command.type === CommandType.C_FUNCTION) {
       this.currentFunc = command.funcName;
     }
-    if (command.type === CommandType.C_RETURN) {
-      this.currentFunc = DEFAULT_FUNC_NAME;
-    }
+
     const code = `// ${command.value}\n` + this.translate(command).join("\n") + "\n";
-    this.push(code);
+
+    if (this.isFirstChunk) {
+      this.isFirstChunk = false;
+      this.push(`// File: ${this.filename}.vm\n` + code);
+    } else {
+      this.push(code);
+    }
     done();
   }
 
@@ -151,7 +154,7 @@ export default class Translator extends Transform {
   }
 
   private createReturnLabelName(funcName: string) {
-    return `${this.filename}.${funcName}$${this.callCount}`;
+    return `${this.filename}.${funcName}$ret.${this.callCount}`;
   }
 
   /**

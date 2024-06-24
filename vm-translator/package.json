@@ -9,13 +9,15 @@
   "license": "ISC",
   "description": "",
   "bin": {
-    "hack-assembler": "./bin/vm-translator.js"
+    "vm-translator": "./bin/vm-translator.js"
   },
   "dependencies": {
+    "multistream": "^4.1.0",
     "pumpify": "^2.0.1",
     "split2": "^4.2.0"
   },
   "devDependencies": {
+    "@types/multistream": "^4.1.3",
     "@types/node": "^20.14.2",
     "@types/pumpify": "^1.4.4",
     "@types/split2": "^4.2.3",

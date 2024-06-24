@@ -1,5 +1,7 @@
 export const COMMENT_SYMBOL = "//";
 export const TEMP_SEGMENT_START = 5;
+export const SYS_FILENAME = "Sys.vm";
+export const MAIN_FILENAME = "Main.vm";
 
 export enum CommandType {
   C_ARITHMETIC = "C_ARITHMETIC",
