@@ -1,0 +1,23 @@
+{
+  "name": "jack-compiler",
+  "type": "module",
+  "version": "1.0.0",
+  "main": "bin/jack-compiler.js",
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "bin": {
+    "jack-compiler": "./bin/jack-compiler.js"
+  },
+  "dependencies": {
+    "pumpify": "^2.0.1",
+    "xmlbuilder2": "^3.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "@types/pumpify": "^1.4.4",
+    "typescript": "^5.4.5"
+  }
+}
