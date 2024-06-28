@@ -1,4 +1,4 @@
-import { createCB, create } from "xmlbuilder2";
+import { createCB } from "xmlbuilder2";
 import { Transform, type TransformCallback } from "stream";
 import type { XMLBuilderCB } from "xmlbuilder2/lib/interfaces.js";
 

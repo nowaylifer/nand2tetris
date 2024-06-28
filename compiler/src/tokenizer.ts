@@ -1,111 +1,78 @@
-import { Transform, type TransformCallback, type TransformOptions } from "stream";
-import { CommentSymbol, Keyword, STRING_QUOTE, TokenType, Symbol } from "./grammar.js";
-import type { Token } from "./types.js";
+import { Readable } from "stream";
+import type { TokenSpecEntryTransform, TokenSpec, TokenUnion } from "./types.js";
 
-const escapeRegExp = (pattern: string) => pattern.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
-const regExpFromArray = (arr: string[]) => arr.map(escapeRegExp).join("|");
-
-const keywordPattern = `(?<keyword>(?:${regExpFromArray(Object.values(Keyword))})\\b)`;
-const symbolPattern = `(?<symbol>${regExpFromArray(Object.values(Symbol))})`;
-const identifierPattern = "(?<identifier>[a-zA-Z_][a-zA-Z0-9_]*)";
-const integerPattern = "(?<integer>\\d+)";
-const stringPattern = `(?<string>${STRING_QUOTE}(?<innerString>[^${STRING_QUOTE}\\n]*?)${STRING_QUOTE})`;
-const inlineCommentPattern = `(?<inlineComment>${escapeRegExp(CommentSymbol.INLINE)}(?<innerInlineComment>.*?)$)`;
-const multilineCommentPattern = `(?<multilineComment>${escapeRegExp(CommentSymbol.MULTILINE_OPEN)}(?<innerMultilineComment>[\\s\\S]*?)${escapeRegExp(CommentSymbol.MULTILINE_CLOSE)})`;
-const tokenRegExp = new RegExp(
-  `^(?:${inlineCommentPattern}|${multilineCommentPattern}|${keywordPattern}|${symbolPattern}|${identifierPattern}|${integerPattern}|${stringPattern})`,
-  "m",
-);
-
-export default class Tokenizer extends Transform {
+export default class Tokenizer {
+  private chunkGenerator: AsyncGenerator<string, null, void>;
+  private readStream: Readable;
+  private spec: TokenSpec;
   private tail = "";
 
-  constructor(options?: TransformOptions) {
-    super({ ...options, objectMode: true });
+  constructor(readStream: Readable, spec: TokenSpec) {
+    this.readStream = readStream;
+    this.spec = spec.map(([regexp, ...rest]) => [new RegExp(`^${regexp.source}`), ...rest]);
+    this.chunkGenerator = this.createChunkGenerator();
   }
 
-  override _transform(data: Buffer | string, _encoding: BufferEncoding, done: TransformCallback) {
-    let chunk = this.tail + data.toString().trim();
-    this.tail = "";
-    this.process(chunk);
-    done();
+  async getNextToken(): Promise<TokenUnion | null> {
+    const chunk = this.tail || (await this.read());
+    if (!chunk) {
+      return null;
+    }
+
+    const token = this.parseToken(chunk);
+    if (token) {
+      return token;
+    }
+
+    const newChunk = await this.read();
+    if (newChunk === null) {
+      if (this.tail) {
+        throw new SyntaxError(`Unexpected token: ${chunk}`);
+      }
+      return null;
+    }
+
+    this.tail += newChunk;
+    return await this.getNextToken();
   }
 
-  override _flush(done: TransformCallback) {
-    this.process(this.tail);
-    done();
-  }
+  private parseToken(chunk: string): TokenUnion | null {
+    if (!chunk) {
+      return null;
+    }
 
-  private process(input: string) {
-    let chunk = input;
-    while (chunk) {
-      const token = this.parseToken(chunk);
+    for (const [regexp, type, transform] of this.spec) {
+      const match = chunk.match(regexp);
 
-      if (token) {
-        this.push(token);
-        chunk = chunk.slice(token.value.length).trim();
-      } else {
-        this.tail = chunk;
-        break;
+      if (match) {
+        this.tail = chunk.slice(match[0].length);
+        if (type === null) {
+          return this.parseToken(this.tail);
+        }
+        return {
+          type,
+          value: this.getTokenValue(match, transform),
+          raw: match[0],
+        } as TokenUnion;
       }
     }
+
+    return null;
   }
 
-  private parseToken(chunk: string): Token | null {
-    const groups = chunk.match(tokenRegExp)?.groups as any;
+  private getTokenValue(match: RegExpMatchArray, transform?: TokenSpecEntryTransform) {
+    const value = match.groups?.value ?? match[0];
+    return transform ? transform(value) : value;
+  }
 
-    if (groups?.keyword) {
-      return {
-        value: groups.keyword,
-        type: TokenType.KEYWORD,
-      };
+  private async read() {
+    return (await this.chunkGenerator.next()).value;
+  }
+
+  private async *createChunkGenerator(): AsyncGenerator<string, null, void> {
+    for await (const chunk of this.readStream) {
+      yield chunk.toString();
     }
-
-    if (groups?.symbol) {
-      return {
-        value: groups.symbol,
-        type: TokenType.SYMBOL,
-      };
-    }
-
-    if (groups?.identifier) {
-      return {
-        value: groups.identifier,
-        type: TokenType.IDENTIFIER,
-      };
-    }
-
-    if (groups?.integer) {
-      return {
-        value: groups.integer,
-        type: TokenType.INTEGER_LITERAL,
-      };
-    }
-
-    if (groups?.string) {
-      return {
-        value: groups.string,
-        type: TokenType.STRING_LITERAL,
-        innerValue: groups.innerString,
-      };
-    }
-
-    if (groups?.inlineComment) {
-      return {
-        value: groups.inlineComment,
-        type: TokenType.INLINE_COMMENT,
-        innerValue: groups.innerInlineComment,
-      };
-    }
-
-    if (groups?.multilineComment) {
-      return {
-        value: groups.multilineComment,
-        type: TokenType.MULTILINE_COMMENT,
-        innerValue: groups.innerMultilineComment,
-      };
-    }
-
     return null;
   }
 }
