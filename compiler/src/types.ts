@@ -1,4 +1,13 @@
-import type { tokenSpec, TokenType, Declaration, Statement, Expression } from "./spec.js";
+import type {
+  tokenSpec,
+  TokenType,
+  Declaration,
+  Statement,
+  Expression,
+  ClassVariableKind,
+  SubroutineKind,
+  MemorySegment,
+} from "./spec.js";
 
 export type TokenSpecEntryTransform = (value: string) => any;
 export type TokenSpecEntry = [RegExp, string | null, TokenSpecEntryTransform?];
@@ -19,9 +28,12 @@ export type Token<T extends TokenTypeUnion> = Extract<TokenUnion, { type: T }>;
 
 export type TypeNode = Token<TokenType.TYPE_LITERAL | TokenType.IDENTIFIER>;
 export type IdentifierNode = Token<TokenType.IDENTIFIER>;
-export type LiteralNode = Token<
-  TokenType.NUMERIC_LITERAL | TokenType.STRING_LITERAL | TokenType.BOOLEAN_LITERAL | "this" | "null"
->;
+export type NumericLiteralNode = Token<TokenType.NUMERIC_LITERAL>;
+export type StringLiteralNode = Token<TokenType.STRING_LITERAL>;
+export type BooleanLiteralNode = Token<TokenType.BOOLEAN_LITERAL>;
+export type ThisNode = Token<TokenType.This>;
+export type NullNode = Token<TokenType.Null>;
+export type LiteralNode = NumericLiteralNode | StringLiteralNode | BooleanLiteralNode | ThisNode | NullNode;
 
 export type ClassDeclarationNode = {
   type: Declaration.Class;
@@ -34,14 +46,14 @@ export type ClassDeclarationNode = {
 
 export type ClassVariableDeclarationNode = {
   type: Declaration.ClassVar;
-  classVarType: string;
+  kind: ClassVariableKind;
   varType: TypeNode;
   identifiers: IdentifierNode[];
 };
 
 export type SubroutineDeclarationNode = {
   type: Declaration.Subroutine;
-  subroutineType: string;
+  kind: SubroutineKind;
   returnType: TypeNode;
   name: IdentifierNode;
   parameters: ParameterNode[];
@@ -103,7 +115,6 @@ export type ExpressionNode =
   | IdentifierNode
   | UnaryExpressonNode
   | BinaryExpressionNode
-  | LogicalExpressionNode
   | ArrayMemberExpressionNode
   | SubroutineCallExpressionNode;
 
@@ -137,4 +148,14 @@ export type SubroutineCallExpressionNode = {
   type: Expression.SubroutineCall;
   name: IdentifierNode;
   arguments: ExpressionNode[];
-} & ({ isMethodCall: false } | { isMethodCall: true; objectName: IdentifierNode });
+} & ({ isMemberCall: false } | { isMemberCall: true; ownerName: IdentifierNode });
+
+export type SymbolTable = Map<
+  string,
+  {
+    kind: ClassVariableKind | "parameter" | "local";
+    memorySegment: MemorySegment;
+    varType: TypeNode;
+    index: number;
+  }
+>;

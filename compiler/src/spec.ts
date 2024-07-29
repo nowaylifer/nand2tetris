@@ -1,5 +1,53 @@
 import type { TokenSpec } from "./types.js";
 
+export enum VMCommand {
+  Return = "return",
+  IfGoto = "if-goto",
+  Goto = "goto",
+  Label = "label",
+  Function = "function",
+  Call = "call",
+  Push = "push",
+  Pop = "pop",
+  Add = "add",
+  Sub = "sub",
+  Neg = "neg",
+  Eq = "eq",
+  Gt = "gt",
+  Lt = "lt",
+  And = "and",
+  Or = "or",
+  Not = "not",
+}
+
+export const BinaryOperatorToCommandMap = {
+  "+": VMCommand.Add,
+  "-": VMCommand.Sub,
+  "=": VMCommand.Eq,
+  ">": VMCommand.Gt,
+  "<": VMCommand.Lt,
+  "&": VMCommand.And,
+  "|": VMCommand.Or,
+  "*": `${VMCommand.Call} Math.multiply 2`,
+  "/": `${VMCommand.Call} Math.divide 2`,
+};
+
+export const UnaryOperatorToCommandMap = {
+  "-": VMCommand.Neg,
+  "~": VMCommand.Not,
+};
+
+export enum MemorySegment {
+  Argument = "argument",
+  Local = "local",
+  Static = "static",
+  Constant = "constant",
+  This = "this",
+  That = "that",
+  Pointer = "pointer",
+  Temp = "temp",
+}
+
 export enum TokenType {
   STRING_LITERAL = "StringLiteral",
   NUMERIC_LITERAL = "NumericLiteral",
@@ -14,6 +62,8 @@ export enum TokenType {
   LOGICAL_AND = "LogicalAND",
   LOGICAL_OR = "LogicalOR",
   LOGICAL_NOT = "LogicalNOT",
+  This = "This",
+  Null = "Null",
 }
 
 export enum Expression {
@@ -47,6 +97,26 @@ export enum Declaration {
   ClassVar = "ClassVariableDeclaration",
 }
 
+export enum SubroutineKind {
+  Function = "Function",
+  Method = "Method",
+  Constructor = "Constructor",
+}
+
+export enum ClassVariableKind {
+  Static = "Static",
+  Field = "Field",
+}
+
+export enum TypeLiteral {
+  Int = "Int",
+  Char = "Char",
+  Void = "Void",
+  Boolean = "Boolean",
+}
+
+const capitalize = (s: string) => s[0]?.toUpperCase() ?? "" + s.slice(1);
+
 export const tokenSpec = [
   // Whitespace
   [/\s+/, null],
@@ -60,16 +130,24 @@ export const tokenSpec = [
   [/do\b/, "do"],
   [/let\b/, "let"],
   [/var\b/, "var"],
-  [/this\b/, "this"],
   [/else\b/, "else"],
   [/while\b/, "while"],
   [/class\b/, "class"],
   [/return\b/, "return"],
-  [/null\b/, "null", () => null],
-  [/(?:static|field)\b/, TokenType.CLASS_VARIABLE],
-  [/(?:int|char|boolean|void)\b/, TokenType.TYPE_LITERAL],
-  [/(?:function|method|constructor)\b/, TokenType.SUBROUTINE],
-  [/(?:true|false)\b/, TokenType.BOOLEAN_LITERAL, (value: string) => (value === "true" ? true : false)],
+  [/this\b/, TokenType.This],
+  [/null\b/, TokenType.Null, () => null],
+  [/(?:int|char|boolean|void)\b/, TokenType.TYPE_LITERAL, (value) => TypeLiteral[capitalize(value) as TypeLiteral]],
+  [/(?:true|false)\b/, TokenType.BOOLEAN_LITERAL, (value) => (value === "true" ? true : false)],
+  [
+    /(?:static|field)\b/,
+    TokenType.CLASS_VARIABLE,
+    (value) => ClassVariableKind[capitalize(value) as ClassVariableKind],
+  ],
+  [
+    /(?:function|method|constructor)\b/,
+    TokenType.SUBROUTINE,
+    (value) => SubroutineKind[capitalize(value) as SubroutineKind],
+  ],
 
   // Symbols, operators:
   [/,/, ","],
@@ -86,7 +164,7 @@ export const tokenSpec = [
   [/\|/, TokenType.LOGICAL_OR],
   [/\&/, TokenType.LOGICAL_AND],
   [/[+\-]/, TokenType.ADDITVE_OPERATOR],
-  [/[><]=?/, TokenType.RELATIONAL_OPERATOR],
+  [/[><]/, TokenType.RELATIONAL_OPERATOR],
   [/[*\/]/, TokenType.MULTIPLICATIVE_OPERATOR],
 
   [/[a-zA-Z_][a-zA-Z0-9_]*/, TokenType.IDENTIFIER],

@@ -22,7 +22,6 @@ import type {
   LiteralNode,
   TokenUnion,
   Token,
-  BinaryExpressionNode,
 } from "./types.js";
 
 export default class Parser {
@@ -67,14 +66,14 @@ export default class Parser {
   }
 
   private async ClassVariableDeclaration(): Promise<ClassVariableDeclarationNode> {
-    const classVarType = (await this.eat(TokenType.CLASS_VARIABLE)).value;
+    const kind = (await this.eat(TokenType.CLASS_VARIABLE)).value;
     const varType = await this.Type();
     const identifiers = await this.VariableIdentifierList();
     await this.eat(";");
 
     return {
       type: Declaration.ClassVar,
-      classVarType,
+      kind,
       varType,
       identifiers,
     };
@@ -91,7 +90,7 @@ export default class Parser {
   }
 
   private async SubroutineDeclaration(): Promise<SubroutineDeclarationNode> {
-    const subroutineType = (await this.eat(TokenType.SUBROUTINE)).value;
+    const kind = (await this.eat(TokenType.SUBROUTINE)).value;
     const returnType = await this.Type();
     const name = await this.Identifier();
     await this.eat("(");
@@ -104,7 +103,7 @@ export default class Parser {
 
     return {
       type: Declaration.Subroutine,
-      subroutineType,
+      kind,
       returnType,
       name,
       parameters,
@@ -315,11 +314,11 @@ export default class Parser {
   }
 
   private LogicalORExpression() {
-    return this.BinaryExpression(Expression.LogicalAND, TokenType.LOGICAL_OR, Expression.Logical);
+    return this.BinaryExpression(Expression.LogicalAND, TokenType.LOGICAL_OR);
   }
 
   private LogicalANDExpression() {
-    return this.BinaryExpression(Expression.Equality, TokenType.LOGICAL_AND, Expression.Logical);
+    return this.BinaryExpression(Expression.Equality, TokenType.LOGICAL_AND);
   }
 
   private EqualityExpression() {
@@ -353,7 +352,6 @@ export default class Parser {
       | TokenType.LOGICAL_AND
       | TokenType.LOGICAL_OR
       | "=",
-    type: Expression.Binary | Expression.Logical = Expression.Binary,
   ): Promise<ExpressionNode> {
     let left = await this[builderName]();
 
@@ -362,7 +360,7 @@ export default class Parser {
       const right = await this[builderName]();
 
       left = {
-        type,
+        type: Expression.Binary,
         operator,
         left,
         right,
@@ -410,7 +408,7 @@ export default class Parser {
 
     return {
       type: Expression.SubroutineCall,
-      ...(method ? { isMethodCall: true, objectName: identifier } : { isMethodCall: false }),
+      ...(method ? { isMemberCall: true, ownerName: identifier } : { isMemberCall: false }),
       name: method ?? identifier,
       arguments: args,
     };
@@ -443,8 +441,8 @@ export default class Parser {
       tokenType === TokenType.NUMERIC_LITERAL ||
       tokenType === TokenType.STRING_LITERAL ||
       tokenType === TokenType.BOOLEAN_LITERAL ||
-      tokenType === "null" ||
-      tokenType === "this"
+      tokenType === TokenType.Null ||
+      tokenType === TokenType.This
     );
   }
 
@@ -467,9 +465,9 @@ export default class Parser {
         return this.StringLiteral();
       case TokenType.BOOLEAN_LITERAL:
         return this.BooleanLiteral();
-      case "null":
+      case TokenType.Null:
         return this.Null();
-      case "this":
+      case TokenType.This:
         return this.This();
       default:
         throw new SyntaxError("Literal: unexpected literal production");
@@ -481,11 +479,11 @@ export default class Parser {
   }
 
   private Null() {
-    return this.eat("null");
+    return this.eat(TokenType.Null);
   }
 
   private This() {
-    return this.eat("this");
+    return this.eat(TokenType.This);
   }
 
   private NumericLiteral() {
