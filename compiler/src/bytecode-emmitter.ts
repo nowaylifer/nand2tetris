@@ -1,3 +1,4 @@
+import { createWriteStream } from "node:fs";
 import type { Writable } from "node:stream";
 import {
   BinaryOperatorToCommandMap,
@@ -29,7 +30,6 @@ import type {
   WhileStatementNode,
   ReturnStatementNode,
 } from "./types.js";
-import { createWriteStream } from "node:fs";
 
 export default class BytecodeEmitter {
   private classSymbolTable: SymbolTable = new Map();
@@ -46,22 +46,31 @@ export default class BytecodeEmitter {
 
   emit() {
     this.populateClassSymbolTable();
-    return this.classNode.body.subroutineList.map(this.SubroutineDeclaration);
+    return this.classNode.body.subroutineList.map(this.SubroutineDeclaration.bind(this));
   }
 
   private write(line: string | number | Array<string | number>) {
-    this.writeStream.write(Array.isArray(line) ? line.join(" ") : line.toString() + "\n");
+    this.writeStream.write((Array.isArray(line) ? line.join(" ") : line.toString()) + "\n");
   }
 
   private SubroutineDeclaration(node: SubroutineDeclarationNode) {
     this.subroutineSymbolTable = new Map();
     this.populateSubroutineSymbolTable(node);
 
-    const commands = [`function ${this.classNode.name.value}.${node.name.value} ${this.getFunctionNVar(node)}`];
+    this.write([`${VMCommand.Function} ${this.classNode.name.value}.${node.name.value} ${this.getFunctionNVar(node)}`]);
+
+    if (node.kind == SubroutineKind.Constructor) {
+      this.Push(MemorySegment.Constant, this.getClassNFields());
+      this.Call("Memory.alloc", 1);
+      this.PopThisPointer();
+    }
 
     if (node.kind == SubroutineKind.Method) {
-      commands.concat([`${VMCommand.Push} ${MemorySegment.Argument} 0`, `${VMCommand.Pop} ${MemorySegment.Pointer} 0`]);
+      this.Push(MemorySegment.Argument, 0);
+      this.PopThisPointer();
     }
+
+    this.StatementList(node.body.statements);
   }
 
   private StatementList(statements: StatementNode[]) {
@@ -94,31 +103,34 @@ export default class BytecodeEmitter {
   }
 
   private IfStatement(node: IfStatementNode) {
-    const ifLabel = `IF_${this.ifLabelIndex++}`;
-    const afterIfLabel = `AFTER_IF_${this.ifLabelIndex}`;
+    const index = this.ifLabelIndex++;
+    const elseLabel = `ELSE_${index}`;
+    const endIfLabel = `END_IF_${index}`;
 
     this.Expression(node.test);
     this.write(VMCommand.Not);
-    this.write([VMCommand.IfGoto, ifLabel]);
+    this.write([VMCommand.IfGoto, node.alternate ? elseLabel : endIfLabel]);
+    this.StatementList(node.consequent);
     if (node.alternate) {
+      this.write([VMCommand.Goto, endIfLabel]);
+      this.write([VMCommand.Label, elseLabel]);
       this.StatementList(node.alternate);
     }
-    this.write([VMCommand.Goto, afterIfLabel]);
-    this.write([VMCommand.Label, ifLabel]);
-    this.StatementList(node.consequent);
-    this.write([VMCommand.Label, afterIfLabel]);
+    this.write([VMCommand.Label, endIfLabel]);
   }
 
   private WhileStatement(node: WhileStatementNode) {
-    const loopLabel = `LOOP_${this.loopLabelIndex++}`;
-    const afterLoopLabel = `AFTER_LOOP_${this.loopLabelIndex}`;
+    const index = this.loopLabelIndex++;
+    const loopLabel = `LOOP_${index}`;
+    const endLoopLabel = `END_LOOP_${index}`;
+
     this.write([VMCommand.Label, loopLabel]);
     this.Expression(node.test);
     this.write(VMCommand.Not);
-    this.write([VMCommand.IfGoto, afterLoopLabel]);
+    this.write([VMCommand.IfGoto, endLoopLabel]);
     this.StatementList(node.body);
     this.write([VMCommand.Goto, loopLabel]);
-    this.write([VMCommand.Label, afterLoopLabel]);
+    this.write([VMCommand.Label, endLoopLabel]);
   }
 
   private Expression(node: ExpressionNode): void {
@@ -156,11 +168,13 @@ export default class BytecodeEmitter {
     let argLen = node.arguments.length + 1;
 
     if (node.isMemberCall) {
-      fnName = `${node.ownerName.value}.${fnName}`;
+      const symbolEntry = this.resolveIdentifier(node.ownerName);
 
-      if (this.resolveIdentifier(node.ownerName)) {
+      if (symbolEntry) {
+        fnName = `${symbolEntry.varType.value}.${fnName}`;
         this.PushIdentifier(node.ownerName);
       } else {
+        fnName = `${node.ownerName.value}.${fnName}`;
         argLen--;
       }
     } else {
@@ -182,8 +196,12 @@ export default class BytecodeEmitter {
   }
 
   private UnaryExpression(node: UnaryExpressonNode) {
-    this.Expression(node);
+    this.Expression(node.argument);
     this.write(UnaryOperatorToCommandMap[node.operator as keyof typeof UnaryOperatorToCommandMap]);
+  }
+
+  private getClassNFields() {
+    return this.classNode.body.classVariableList.reduce((n, declaration) => n + declaration.identifiers.length, 0);
   }
 
   private getFunctionNVar(node: SubroutineDeclarationNode) {
@@ -192,10 +210,6 @@ export default class BytecodeEmitter {
 
   private PopThatPointer() {
     this.Pop(...this._thatPointer());
-  }
-
-  private PushThatPointer() {
-    this.Push(...this._thatPointer());
   }
 
   private PopThisPointer() {
@@ -272,11 +286,7 @@ export default class BytecodeEmitter {
     return resolved;
   }
 
-  private resolveIdentifier(node: IdentifierNode | "this") {
-    if (node === "this") {
-      return this.subroutineSymbolTable.get("this");
-    }
-
+  private resolveIdentifier(node: IdentifierNode) {
     if (this.subroutineSymbolTable.has(node.value)) {
       return this.subroutineSymbolTable.get(node.value)!;
     }
@@ -289,15 +299,10 @@ export default class BytecodeEmitter {
   }
 
   private populateSubroutineSymbolTable(node: SubroutineDeclarationNode) {
-    let argumentIndex = 0;
+    let argumentIndex = node.kind === SubroutineKind.Method ? 1 : 0;
     let localIndex = 0;
 
-    const params =
-      node.kind === SubroutineKind.Method
-        ? [{ identifier: { value: "this" }, varType: this.classNode.name }, ...node.parameters]
-        : node.parameters;
-
-    for (const param of params) {
+    for (const param of node.parameters) {
       this.subroutineSymbolTable.set(param.identifier.value, {
         kind: "parameter",
         memorySegment: MemorySegment.Argument,

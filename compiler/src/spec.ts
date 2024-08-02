@@ -115,7 +115,7 @@ export enum TypeLiteral {
   Boolean = "Boolean",
 }
 
-const capitalize = (s: string) => s[0]?.toUpperCase() ?? "" + s.slice(1);
+const capitalize = (s: string) => (s[0]?.toUpperCase() ?? "") + s.slice(1);
 
 export const tokenSpec = [
   // Whitespace

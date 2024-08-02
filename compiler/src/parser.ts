@@ -379,6 +379,7 @@ export default class Parser {
         break;
       case TokenType.LOGICAL_NOT:
         operator = (await this.eat(TokenType.LOGICAL_NOT)).value;
+        break;
       default:
         throw new SyntaxError("UnaryExpression: unexpected expression production");
     }
